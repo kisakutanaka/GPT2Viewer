@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { loadModel } from './lib/model'
-import { startGeneration, stepGeneration, decodeGenerated } from './lib/generate'
+import { startGeneration, stepGeneration, decodeGenerated, type GenerationStep } from './lib/generate'
 import './App.css'
 
 const PROMPT = '今日は天気が良いので'
@@ -9,6 +9,7 @@ const MAX_NEW_TOKENS = 20
 function App() {
   const [status, setStatus] = useState('モデルを読み込み中...')
   const [generatedText, setGeneratedText] = useState('')
+  const [steps, setSteps] = useState<GenerationStep[]>([])
 
   useEffect(() => {
     let cancelled = false
@@ -25,13 +26,14 @@ function App() {
 
       for (let i = 0; i < MAX_NEW_TOKENS; i++) {
         if (cancelled) return
-        const { candidates, chosen, isEos } = await stepGeneration(session)
+        const result = await stepGeneration(session)
         console.log(
-          `step ${i}: chose "${chosen.piece}" (${(chosen.prob * 100).toFixed(1)}%) | top candidates:`,
-          candidates.map((c) => `${c.piece || '∅'}:${(c.prob * 100).toFixed(1)}%`).join(', '),
+          `step ${i}: chose "${result.chosen.piece}" (${(result.chosen.prob * 100).toFixed(1)}%) | top candidates:`,
+          result.candidates.map((c) => `${c.piece || '∅'}:${(c.prob * 100).toFixed(1)}%`).join(', '),
         )
+        setSteps((prev) => [...prev, result])
         setGeneratedText(decodeGenerated(session))
-        if (isEos) break
+        if (result.isEos) break
       }
     }
 
@@ -55,7 +57,7 @@ function App() {
       <p>
         generated: <strong>{generatedText}</strong>
       </p>
-      <p>各ステップの候補トークンと確率はブラウザのコンソールを確認してください。</p>
+      <p>{steps.length}トークン生成済み（各ステップの候補と確率はコンソールを確認してください）</p>
     </section>
   )
 }
