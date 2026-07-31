@@ -1,7 +1,8 @@
 import type { GenerationStep } from '../lib/generate'
 
 interface GenerationStageProps {
-  prompt: string
+  introText: string
+  storyPrefix: string
   generatedText: string
   currentStep: GenerationStep | null
   /** Whether the sampled token should be highlighted yet (two-phase reveal per step). */
@@ -11,7 +12,8 @@ interface GenerationStageProps {
 }
 
 export function GenerationStage({
-  prompt,
+  introText,
+  storyPrefix,
   generatedText,
   currentStep,
   revealed,
@@ -24,11 +26,17 @@ export function GenerationStage({
         {stepCount} / {maxSteps} トークン
       </p>
 
+      <p className="intro-text">{introText}</p>
+
       <p className="growing-text">
-        {prompt}
+        {storyPrefix}
         <span className="growing-text-new">{generatedText}</span>
         <span className="cursor-blink">|</span>
       </p>
+
+      {currentStep?.forced && revealed && (
+        <p className="forced-banner">✏️ 選んだ単語「{currentStep.chosen.piece}」を差し込みます</p>
+      )}
 
       {currentStep && (
         <div className="candidate-list">

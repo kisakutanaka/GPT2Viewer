@@ -1,15 +1,17 @@
 interface ResultStageProps {
-  prompt: string
+  introText: string
+  storyPrefix: string
   generatedText: string
   onRestart: () => void
 }
 
-export function ResultStage({ prompt, generatedText, onRestart }: ResultStageProps) {
+export function ResultStage({ introText, storyPrefix, generatedText, onRestart }: ResultStageProps) {
   return (
     <section className="stage stage-result">
       <h1 className="app-title">できあがり！</h1>
+      <p className="intro-text">{introText}</p>
       <p className="result-text">
-        {prompt}
+        {storyPrefix}
         {generatedText}
       </p>
       <button className="primary-button" onClick={onRestart}>
