@@ -1,11 +1,11 @@
 {
+  "_name_or_path": "rinna/japanese-gpt2-xsmall",
   "activation_function": "gelu_new",
   "architectures": [
     "GPT2LMHeadModel"
   ],
   "attn_pdrop": 0.1,
   "bos_token_id": 1,
-  "dtype": "float32",
   "embd_pdrop": 0.1,
   "eos_token_id": 2,
   "gradient_checkpointing": false,
@@ -33,7 +33,7 @@
       "max_length": 50
     }
   },
-  "transformers_version": "4.57.6",
+  "transformers_version": "4.33.2",
   "use_cache": true,
   "vocab_size": 32000
 }

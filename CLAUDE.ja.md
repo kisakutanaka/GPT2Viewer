@@ -23,10 +23,11 @@
 
 - **スタック**: Vite + React + TypeScript。モデル推論はクライアントサイドで [`@huggingface/transformers`](https://github.com/huggingface/transformers.js)（transformers.js、内部はONNX Runtime Webのwasmバックエンド）を使用。バックエンドなしのGitHub Pages静的サイト。
 - **デプロイ**: `.github/workflows/deploy.yml` が `main` へのpushのたびに自動ビルド＆Pagesデプロイを行う（最終ステップではなく早い段階で設定済み — 都度Pages上で確認するのが通常のワークフロー）。GitHub側で一度だけ手動設定が必要: Settings → Pages → Source を「GitHub Actions」に変更。`vite.config.ts` の `base: '/GPT2Viewer/'` はGitHub Pagesのサブパスに合わせたもので、リポジトリ名が変わった場合は要更新。
-- **モデルロード**（`src/lib/model.ts`）: `rinna/japanese-gpt2-xsmall`（MITライセンス、GPT2アーキテクチャ、6層・512隠れ層、sentencepiece/T5Tokenizer）をONNX変換した `saldra/rinna-japanese-gpt2-xsmall-onnx` を読み込む。このリポジトリ固有で分かりにくい点が2つあり、別モデルに差し替える際も踏みやすい落とし穴:
-  - transformers.js標準の `onnx/model.onnx` 命名ではなく、`optimum-cli export onnx` 由来の生の命名（`decoder_model_merged*.onnx`）のままなので、`from_pretrained` に `model_file_name: 'decoder_model_merged'` を明示的に渡す必要がある。
-  - 量子化版（`dtype: 'q8'`、`decoder_model_merged_quantized.onnx`、約40MB）はQDQ/MatMulNBits量子化形式のため、**onnxruntime-web(wasm)ではロードに失敗する**（`Missing required scale for ... wte.weight`）。onnxruntime-node（Node.js）では問題なくロードできていたため気づきにくい差異。現状は回避策として `dtype: 'fp32'`（非量子化、約152MB）を使用しており未解決。iPhone向けを考えるとファイルサイズは無視できない懸念点。
-- 残り2モデル（Plan.mdの3モデル要件）を追加する際も、モデルごとに同様のONNX変換・ファイル命名・量子化まわりの癖に当たる可能性が高い。Node.jsではなく実際のブラウザでのロードを都度確認すること（Node/wasmのONNX Runtimeバックエンドの対応状況が既に一度乖離しているため）。
+- **モデルロード**（`src/lib/model.ts`）: ベースモデルは `rinna/japanese-gpt2-xsmall`（MITライセンス、GPT2アーキテクチャ、6層・512隠れ層、sentencepiece/T5Tokenizer）。自分たちでONNX変換し、`public/models/rinna-japanese-gpt2-xsmall/` にコミット済みで、**実行時にHugging Face Hubからは読み込まない**（`env.allowRemoteModels = false`。`env.localModelPath` はViteの `import.meta.env.BASE_URL` から組み立てているので `/GPT2Viewer/` のPagesサブパス配下でも正しく解決する）。
+  - 自作した経緯: Hub上に既存のONNX変換版（`saldra/rinna-japanese-gpt2-xsmall-onnx`）はあったが、その量子化版がQDQ/MatMulNBits形式のため **onnxruntime-web(wasm)ではロードに失敗**（`Missing required scale for ... wte.weight`）。onnxruntime-node（Node.js）では問題なくロードできてしまうため、Nodeだけのテストでは気づきにくい落とし穴だった。非量子化版は152MBあり、iPhone想定を考えると無視できない懸念だった。
+  - 作成方法: conda環境 `ai-tools`（Python 3.10、プロジェクト専用ではなくAI/ML作業全般向け）に `optimum-onnx` + `onnx` + `onnxruntime` + `torch` をインストール。変換: `optimum-cli export onnx --model rinna/japanese-gpt2-xsmall --task text-generation-with-past <dir>`（統合された単一の `model.onnx` が出力され、transformers.js標準の命名と一致するため `model_file_name` の指定は不要）。量子化: `onnxruntime.quantization.quantize_dynamic(..., weight_type=QuantType.QUInt8)`（標準的なdynamic int8方式。wasmで失敗したblockwise/QDQ形式ではない）。結果: 215MB → 約54MBに削減、`dtype: 'q8'` でonnxruntime-webから問題なくロードできることを確認済み。非量子化の中間ファイル `model.onnx` は実行時に不要なのでコミットしていない。
+  - コミットした54MBのONNXファイルはpush時にGitHubの「50MB超はGit LFS推奨」警告が出るが、100MBのハード上限は超えていないためpush自体は成功する。残り2モデル追加後（合計150〜300MB程度の見込み）もLFS化は見送る方針（合意済み）。なお、この構成（GitHub Actions経由のPagesデプロイ）はGit LFSのオブジェクトをそのままでは配信できず、`actions/checkout` に `lfs: true` を付ける等の追加対応が要る点に注意（「LFSにすれば自然に動く」ではない）。
+- 残り2モデル（Plan.mdの3モデル要件）を追加する際は、同じ変換＋量子化の手順を繰り返すことになる見込み。Node.jsではなく実際のブラウザでのロードをモデルごとに都度確認すること（Node/wasmのONNX Runtimeバックエンドの対応状況が既に一度乖離しているため）。
 
 ## 設計方針（Plan.mdより）
 

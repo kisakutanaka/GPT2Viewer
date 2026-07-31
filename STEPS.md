@@ -6,7 +6,8 @@
 前提技術メモ:
 - TypeScript + Vite（GitHub Pages配信を想定した静的ビルド）
 - モデル推論はクライアントサイドで [transformers.js](https://github.com/huggingface/transformers.js)（`@huggingface/transformers`）を使用
-- rinna/japanese-gpt2-xsmall はそのままだとONNXがないため、変換済みの `saldra/rinna-japanese-gpt2-xsmall-onnx`（onnx/フォルダ・tokenizer.json・spiece.model 完備）を利用する
+- rinna/japanese-gpt2-xsmall（MITライセンス）は自分たちで `optimum-onnx` を使ってONNXに変換し、標準的なdynamic int8量子化をかけたものを `public/models/` に同梱して配信している（詳細はStep 1参照。conda環境 `ai-tools` にPythonツールチェーンあり）
+- 動作環境はiPhone（モバイルSafari）を想定。モデルサイズ・メモリ使用量は都度この観点で確認する
 
 ---
 
@@ -21,18 +22,20 @@
 ## Step 1: transformers.js 導入 & モデルロード確認 ✅
 
 - [x] `@huggingface/transformers` を依存関係に追加
-- [x] `saldra/rinna-japanese-gpt2-xsmall-onnx` をロードするだけの最小コードを書く（`src/lib/model.ts`、コンソールにモデル情報を出す）
-- [x] ブラウザで実際にモデルダウンロード〜ロードが成功することを確認（CORSエラーなし）
+- [x] モデルをロードするだけの最小コードを書く（`src/lib/model.ts`、コンソールにモデル情報を出す）
+- [x] ブラウザで実際にモデルダウンロード〜ロードが成功することを確認（ローカル・本番Pagesとも確認済み、エラーなし）
 
-**わかったこと / 積み残し:**
-- このリポジトリは transformers.js 標準の `onnx/model.onnx` 命名ではなく optimum-cli 由来の `decoder_model_merged*.onnx` 命名なので `model_file_name: 'decoder_model_merged'` の指定が必要
-- `dtype: 'q8'`（量子化版 `decoder_model_merged_quantized.onnx`, 40MB）は QDQ/MatMulNBits 形式が原因で **onnxruntime-web(wasm)ではロード失敗**（Node/onnxruntime-nodeでは成功していたため気づきにくい差異）。当面 `dtype: 'fp32'`（非量子化, 152MB）で進める
-- 後日タスク: モデルサイズが大きい（152MB×モデル数）ので、量子化ロード問題の解決（別の量子化形式で再変換 or onnxruntime-webのアップデート待ち）をどこかのStepで検討する
+**わかったこと（経緯）:**
+- 当初 `saldra/rinna-japanese-gpt2-xsmall-onnx`（HFの変換済みONNX）を試したが、量子化版（`dtype: 'q8'`）がQDQ/MatMulNBits形式のため **onnxruntime-web(wasm)ではロード失敗**（Node/onnxruntime-nodeでは成功していたため気づきにくい差異）。非量子化版は152MBあり、iPhone想定だとメモリ的に厳しい懸念があった
+- 対応として、conda環境 `ai-tools`（Python 3.10、`optimum-onnx` + `onnx` + `onnxruntime` + `torch`）を作り、`rinna/japanese-gpt2-xsmall` を自分たちで `optimum-cli export onnx --task text-generation-with-past` でONNX変換 → `onnxruntime.quantization.quantize_dynamic`（標準dynamic int8, `QuantType.QUInt8`）で量子化
+- 変換後は transformers.js 標準の `onnx/model.onnx` / `onnx/model_quantized.onnx` 命名になり `model_file_name` の指定が不要に。量子化後は **215MB → 約54MBに削減**、`dtype: 'q8'` でブラウザ（wasm）から問題なくロードできることを確認
+- モデル一式は `public/models/rinna-japanese-gpt2-xsmall/` にコミット済み。非量子化の中間ファイル（`model.onnx`, 215MB）は実行時に不要なので削除済み
+- 54MBのONNXファイルはGitHubのpush時に「50MB超はGit LFS推奨」の警告が出るが、100MBのハード上限は超えていないためpushは成功する。3モデル分（見込み150〜300MB程度）でもLFS化は見送り、素のgitのまま進める方針（合意済み）
 
-## Step 2: トークナイザー動作確認
+## Step 2: トークナイザー動作確認 ✅
 
-- [ ] 適当な日本語テキストを encode → token id 配列 → decode で元に戻るか確認
-- [ ] token id と対応する文字列（サブワード）をコンソール表示できるようにする
+- [x] 適当な日本語テキストを encode → token id 配列 → decode で元に戻るか確認（`src/App.tsx`、サンプル文「今日はいい天気ですね」でラウンドトリップ確認済み）
+- [x] token id と対応する文字列（サブワード）をコンソール表示できるようにする
 
 ## Step 3: 1ステップ分の推論（次トークン候補と確率）
 
@@ -72,8 +75,7 @@
 ## Step 9: GitHub Pagesへのデプロイ ✅（前倒しで設定済み）
 
 - [x] GitHub Actionsでビルド＆Pagesへの自動デプロイを設定（`.github/workflows/deploy.yml`、mainへのpushで自動実行）
-- [ ] リポジトリのSettings → Pages → Source を「GitHub Actions」に変更（ユーザー担当、初回のみ）
-- [ ] 実際にPages上でモデルダウンロード〜生成まで動作することを確認
+- [x] リポジトリのSettings → Pages → Source を「GitHub Actions」に変更（ユーザー担当、初回のみ）
+- [x] 実際にPages上でモデルダウンロード〜ロードまで動作することを確認（自作量子化モデル、エラーなし）
 
 進行状況を都度Pages上で確認したいとのことなので、Step 9は前倒しで設定済み。以降の各Stepはpushするたびに `https://kisakutanaka.github.io/GPT2Viewer/` に自動反映される。
-- [ ] 実際にPages上でモデルダウンロード〜生成まで動作することを確認

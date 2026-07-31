@@ -9,9 +9,12 @@ export interface ModelDef {
   sourceRepo: string
 }
 
-// rinna/japanese-gpt2-xsmall (MIT license), re-exported to ONNX ourselves with
-// standard dynamic int8 quantization so it loads reliably in onnxruntime-web (wasm).
-// See STEPS.md Step 1 notes for why the hub's pre-converted ONNX build doesn't work.
+// rinna/japanese-gpt2-xsmall (MIT license), ONNX build from
+// https://huggingface.co/saldra/rinna-japanese-gpt2-xsmall-onnx (also MIT), copied locally.
+// Its quantized graph (int4 blockwise/MatMulNBits) only loads in onnxruntime-web if the
+// 'TransposeDQWeightsForMatMulNBits' fusion optimization is skipped — see graphOptimizationLevel
+// below and STEPS.md Step 1 notes for the full story (including why a self-converted int8
+// alternative was tried and dropped: near-identical output quality, extra size, extra complexity).
 export const BASE_MODEL: ModelDef = {
   id: 'rinna-japanese-gpt2-xsmall',
   label: 'rinna GPT-2 (xsmall)',
@@ -26,6 +29,7 @@ export async function loadModel(def: ModelDef = BASE_MODEL) {
   const tokenizer = await AutoTokenizer.from_pretrained(def.id)
   const model = await AutoModelForCausalLM.from_pretrained(def.id, {
     dtype: 'q8',
+    session_options: { graphOptimizationLevel: 'basic' },
   })
   return { tokenizer, model }
 }
