@@ -37,9 +37,18 @@ export const DOUYOU_MODEL: ModelDef = {
   sourceRepo: 'rinna/japanese-gpt2-xsmall (fine-tuned)',
 }
 
-// The remaining fine-tuned model (小説/novel style) required by Plan.md will be appended here
+// "小説" style: rinna/japanese-gpt2-xsmall fine-tuned on public-domain Aozora Bunko works (see
+// training-data/aozora/) — same self-converted pipeline as DOUYOU_MODEL, no session_options
+// workaround needed for the same reason (QOperator format quantization).
+export const AOZORA_MODEL: ModelDef = {
+  id: 'rinna-japanese-gpt2-xsmall-aozora',
+  label: 'rinna GPT-2 (xsmall) — 青空文庫ファインチューン',
+  sourceRepo: 'rinna/japanese-gpt2-xsmall (fine-tuned)',
+}
+
+// The remaining fine-tuned model (名言/quote style) required by Plan.md will be appended here
 // once converted.
-export const MODELS: ModelDef[] = [BASE_MODEL, DOUYOU_MODEL]
+export const MODELS: ModelDef[] = [BASE_MODEL, DOUYOU_MODEL, AOZORA_MODEL]
 
 env.allowLocalModels = true
 env.allowRemoteModels = false

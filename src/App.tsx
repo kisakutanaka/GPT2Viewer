@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react'
-import { loadModel, MODELS, DOUYOU_MODEL } from './lib/model'
+import { loadModel, MODELS, DOUYOU_MODEL, AOZORA_MODEL } from './lib/model'
 import { startGeneration, stepGeneration, decodeGenerated, tokenizeWord, type GenerationStep } from './lib/generate'
 import type { PreTrainedModel, PreTrainedTokenizer } from '@huggingface/transformers'
 import { WordSelectStage, type StyleOption } from './components/WordSelectStage'
@@ -7,7 +7,10 @@ import { GenerationStage } from './components/GenerationStage'
 import { ResultStage } from './components/ResultStage'
 import './App.css'
 
-const WORD_CHOICES = ['猫', '今日', '学校', '音楽', '旅行', '未来', '友達', '料理', '宇宙', '花', '海', '本']
+const WORD_CHOICES = [
+  '猫', '今日', '学校', '音楽', '旅行', '未来', '友達', '料理', '宇宙', '花', '海', '本',
+  '犬', '星', '夢', '家族', '雨', '山', '電車', '夏', '桜', '光', '時間', '冒険',
+]
 const WORDS_TO_PICK = 3
 const MAX_NEW_TOKENS = 80
 // Pacing for scene 2, split into two phases per token so the "候補と確率が表示される → 一つ選ばれる"
@@ -17,11 +20,11 @@ const MAX_NEW_TOKENS = 80
 const CANDIDATE_DISPLAY_MS = 750
 const CHOSEN_HOLD_MS = 500
 
-// 小説/名言 still use the base model — their fine-tuned corpora haven't been sourced yet
-// (see STEPS.md Step 10). 詩 uses the 童謡-fine-tuned model. Swap the remaining `modelId`s
-// once the other 2 fine-tunes exist.
+// 名言 still uses the base model — its fine-tuned corpus hasn't been sourced yet (see
+// STEPS.md Step 10). 詩/小説 use their respective fine-tuned models. Swap the remaining
+// `modelId` once the last fine-tune exists.
 const STYLE_OPTIONS: (StyleOption & { modelId: string })[] = [
-  { key: 'novel', label: '小説', modelId: MODELS[0].id },
+  { key: 'novel', label: '小説', modelId: AOZORA_MODEL.id },
   { key: 'quote', label: '名言', modelId: MODELS[0].id },
   { key: 'poem', label: '詩', modelId: DOUYOU_MODEL.id },
 ]
@@ -108,7 +111,11 @@ function App() {
 
     try {
       const { model, tokenizer } = loaded
-      const session = await startGeneration(model, tokenizer, intro + story)
+      // Only `story` (the seed word) is fed to the model — `intro` is narration text shown in
+      // the UI (see introText below) but never appeared in any fine-tuning corpus, and feeding
+      // it as context measurably dilutes a fine-tuned style back toward generic/base-model-like
+      // output (confirmed by comparing generation with vs without it as a prompt prefix).
+      const session = await startGeneration(model, tokenizer, story)
 
       // w1 is already baked into `story`. To keep the "w1、w2、w3を使った文章を作ります" promise,
       // w2/w3 aren't left to chance — their tokens get force-inserted (stepGeneration's forcedId)

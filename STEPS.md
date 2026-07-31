@@ -101,8 +101,10 @@ Step 7で保留していた3モデル目標に着手。既存のONNX変換済み
 - [x] 詩スタイルモデルのONNX変換・量子化（Step 1の`ai-tools`環境・手順を再利用）→ `public/models/rinna-japanese-gpt2-xsmall-douyou/`へ配置。`optimum-cli export onnx` → `quantize_dynamic(weight_type=QUInt8)`（QOperator形式）で38MB。QOperator形式のためsaldra版で踏んだQDQ/MatMulNBits融合バグは発生せず、`graphOptimizationLevel`指定なしで`onnxruntime-web`にロード確認済み。`src/lib/model.ts`に`DOUYOU_MODEL`として追加、`src/App.tsx`の「詩」スタイルに接続済み
 - [x] モデルが2つになったのに合わせて読み込みタイミングを見直し: 起動時のプリロードをやめ、「作文する」押下時に選択スタイルのモデルだけ遅延ロード（`ensureModel`）。「もう一度体験する」では逆にキャッシュ済み全モデルを`model.dispose()`で解放してからキャッシュクリアし、次回選択時は必ず再ロードになるようにした（常に最大1モデル分のメモリしか保持しない設計。キオスク的な長時間・多人数利用を想定）。ブラウザ動作確認済み
 - [ ] 名言スタイル用コーパス収集（Wikiquote日本語版などを情報源に個々の名言をリスト化する方針で検討中）
-- [ ] 小説スタイル用コーパス収集（青空文庫、著作権切れ作家の作品）
-- [ ] 名言・小説スタイルのファインチューニング
+- [x] 小説スタイル用コーパス収集: 青空文庫の公式メタデータCSV（`list_person_all_extended_utf8.csv`、作品著作権フラグで判定）から著作権切れの夏目漱石・芥川竜之介・太宰治の代表作11作品を取得・クリーニング。合計約231万文字（童謡コーパスの約260倍）。`training-data/aozora/corpus.json`/`corpus.txt`
+- [x] 小説スタイルのファインチューニング（5epoch、検証ロス最小のepoch3を採用）→ ONNX変換・量子化（38MB）→ `public/models/rinna-japanese-gpt2-xsmall-aozora/`へ配置、`src/lib/model.ts`に`AOZORA_MODEL`として追加、`src/App.tsx`の「小説」スタイルに接続。詳細・わかったことは`training-data/aozora/README.md`参照
+- [ ] 名言スタイルのファインチューニング
+- [x] **重要なバグ修正**: モデルへの実際の生成プロンプトに`intro`（「◯◯、◯◯、◯◯を使った文章を作ります。」）を含めていたため、ファインチューニング済みモデルの文体がベースモデル寄りに薄まってしまう問題を発見・修正。`intro`は学習コーパスに一切登場しないパターンなので、長い前置きに引っ張られて文体が中和されていた。修正: モデルへの実プロンプトは`story`（単語のみ）とし、`intro`はUI表示専用に留めた（`src/App.tsx`の`startGeneration`呼び出し）。全スタイル共通の問題だったため、詩・小説どちらにも効く修正
 - [ ] `src/App.tsx`の`STYLE_OPTIONS`を実際の3モデルに接続
 
 **わかったこと（ファインチューニング全般）:**
