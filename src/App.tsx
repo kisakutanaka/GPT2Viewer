@@ -14,8 +14,8 @@ const MAX_NEW_TOKENS = 80
 // moment is easy to follow rather than flashing by. Tune these two independently:
 // - CANDIDATE_DISPLAY_MS: candidates shown with bars, nothing highlighted yet (時間をかけて確率を見る)
 // - CHOSEN_HOLD_MS: the sampled token is highlighted, held before it's appended to the text
-const CANDIDATE_DISPLAY_MS = 900
-const CHOSEN_HOLD_MS = 600
+const CANDIDATE_DISPLAY_MS = 750
+const CHOSEN_HOLD_MS = 500
 
 // 小説/名言 still use the base model — their fine-tuned corpora haven't been sourced yet
 // (see STEPS.md Step 10). 詩 uses the 童謡-fine-tuned model. Swap the remaining `modelId`s

@@ -99,6 +99,7 @@ Step 7で保留していた3モデル目標に着手。既存のONNX変換済み
 - [x] 詩スタイル用コーパス収集: 著作権消滅済み（没後70年超、作詞者の没年で判断）の童謡作詞者4名（野口雨情1945没・北原白秋1942没・高野辰之1947没・清水かつら1951没）から47曲を[worldfolksong.com](https://www.worldfolksong.com/songbook/japan/index.html)よりスクレイピング。`training-data/douyou/corpus.json`/`corpus.txt`
 - [x] 詩スタイルのファインチューニング試行・epoch数の検証 → **epoch35を採用**（詳細・わかったことは`training-data/douyou/README.md`参照）
 - [x] 詩スタイルモデルのONNX変換・量子化（Step 1の`ai-tools`環境・手順を再利用）→ `public/models/rinna-japanese-gpt2-xsmall-douyou/`へ配置。`optimum-cli export onnx` → `quantize_dynamic(weight_type=QUInt8)`（QOperator形式）で38MB。QOperator形式のためsaldra版で踏んだQDQ/MatMulNBits融合バグは発生せず、`graphOptimizationLevel`指定なしで`onnxruntime-web`にロード確認済み。`src/lib/model.ts`に`DOUYOU_MODEL`として追加、`src/App.tsx`の「詩」スタイルに接続済み
+- [x] モデルが2つになったのに合わせて読み込みタイミングを見直し: 起動時のプリロードをやめ、「作文する」押下時に選択スタイルのモデルだけ遅延ロード（`ensureModel`）。「もう一度体験する」では逆にキャッシュ済み全モデルを`model.dispose()`で解放してからキャッシュクリアし、次回選択時は必ず再ロードになるようにした（常に最大1モデル分のメモリしか保持しない設計。キオスク的な長時間・多人数利用を想定）。ブラウザ動作確認済み
 - [ ] 名言スタイル用コーパス収集（Wikiquote日本語版などを情報源に個々の名言をリスト化する方針で検討中）
 - [ ] 小説スタイル用コーパス収集（青空文庫、著作権切れ作家の作品）
 - [ ] 名言・小説スタイルのファインチューニング
