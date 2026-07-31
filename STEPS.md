@@ -6,8 +6,9 @@
 前提技術メモ:
 - TypeScript + Vite（GitHub Pages配信を想定した静的ビルド）
 - モデル推論はクライアントサイドで [transformers.js](https://github.com/huggingface/transformers.js)（`@huggingface/transformers`）を使用
-- rinna/japanese-gpt2-xsmall（MITライセンス）は自分たちで `optimum-onnx` を使ってONNXに変換し、標準的なdynamic int8量子化をかけたものを `public/models/` に同梱して配信している（詳細はStep 1参照。conda環境 `ai-tools` にPythonツールチェーンあり）
+- rinna/japanese-gpt2-xsmall（MITライセンス）のONNX変換版（`saldra/rinna-japanese-gpt2-xsmall-onnx`、MITライセンス、40MB、int4 blockwise量子化）を `public/models/` にローカルコピーして配信している。読み込み時に `session_options: { graphOptimizationLevel: 'basic' }` を指定するのが必須（詳細はStep 1参照）
 - 動作環境はiPhone（モバイルSafari）を想定。モデルサイズ・メモリ使用量は都度この観点で確認する
+- モデルのデフォルト`generation_config`は `do_sample: true` 前提。greedy（常に最尤トークン）で生成すると`<unk>`ループ等に陥りやすく、top-k+温度によるサンプリングの方が明らかに自然な文章になることを確認済み（Step 1の検証時）。Step 3/4はこれを踏まえてサンプリングを前提に設計する
 
 ---
 
@@ -26,11 +27,11 @@
 - [x] ブラウザで実際にモデルダウンロード〜ロードが成功することを確認（ローカル・本番Pagesとも確認済み、エラーなし）
 
 **わかったこと（経緯）:**
-- 当初 `saldra/rinna-japanese-gpt2-xsmall-onnx`（HFの変換済みONNX）を試したが、量子化版（`dtype: 'q8'`）がQDQ/MatMulNBits形式のため **onnxruntime-web(wasm)ではロード失敗**（Node/onnxruntime-nodeでは成功していたため気づきにくい差異）。非量子化版は152MBあり、iPhone想定だとメモリ的に厳しい懸念があった
-- 対応として、conda環境 `ai-tools`（Python 3.10、`optimum-onnx` + `onnx` + `onnxruntime` + `torch`）を作り、`rinna/japanese-gpt2-xsmall` を自分たちで `optimum-cli export onnx --task text-generation-with-past` でONNX変換 → `onnxruntime.quantization.quantize_dynamic`（標準dynamic int8, `QuantType.QUInt8`）で量子化
-- 変換後は transformers.js 標準の `onnx/model.onnx` / `onnx/model_quantized.onnx` 命名になり `model_file_name` の指定が不要に。量子化後は **215MB → 約54MBに削減**、`dtype: 'q8'` でブラウザ（wasm）から問題なくロードできることを確認
-- モデル一式は `public/models/rinna-japanese-gpt2-xsmall/` にコミット済み。非量子化の中間ファイル（`model.onnx`, 215MB）は実行時に不要なので削除済み
-- 54MBのONNXファイルはGitHubのpush時に「50MB超はGit LFS推奨」の警告が出るが、100MBのハード上限は超えていないためpushは成功する。3モデル分（見込み150〜300MB程度）でもLFS化は見送り、素のgitのまま進める方針（合意済み）
+- 当初 `saldra/rinna-japanese-gpt2-xsmall-onnx`（HFの変換済みONNX）をそのまま使おうとしたが、量子化版（`dtype: 'q8'`、int4 blockwise/MatMulNBits形式）が **onnxruntime-web(wasm)ではロード失敗**（`Missing required scale: ...wte.weight_merged_0_scale`。Node/onnxruntime-nodeでは成功していたため気づきにくい差異）
+- 原因を調査した結果、GPT2のtied weights（`wte.weight`とlm_headが同一テンソル）に対する重複排除最適化と、QDQ→MatMulNBits融合最適化（`TransposeDQWeightsForMatMulNBits`）の組み合わせがエッジケースを踏んでいる可能性が高いと判明。`session_options: { graphOptimizationLevel: 'basic' }`（`'extended'`/`'all'`で有効な融合パスをスキップ）を指定すれば **元のsaldra版40MBファイルのままロードできる**ことを、`onnxruntime-web`を直接Node.jsから叩いて確認した
+- 別解として、conda環境 `ai-tools`（Python 3.10、`optimum-onnx` + `onnx` + `onnxruntime` + `torch`）で `rinna/japanese-gpt2-xsmall` を自前で `optimum-cli export onnx` → `quantize_dynamic`（標準dynamic int8）で変換する方法も試した（215MB→54MB）。saldra版(40MB, int4)と自前版(54MB, int8)で生成品質を比較（top-10候補の一致度6〜8/10、サンプリング生成でも明確な差は見られず）した結果、**品質差はほぼ無いと判断しsaldra版（`graphOptimizationLevel: 'basic'`込み）のみ採用**。自前変換の`ai-tools`環境やコマンドは今後別モデルを変換する際に再利用できる
+- モデル一式（`saldra/rinna-japanese-gpt2-xsmall-onnx`からダウンロード、MITライセンス）は `public/models/rinna-japanese-gpt2-xsmall/` にコミット済み（`onnx/model_quantized.onnx`にリネーム）
+- 40MBのONNXファイルはGit LFS化せず素のgitで管理する方針（合意済み）。3モデル分（見込み100〜150MB程度）でもこのまま進める
 
 ## Step 2: トークナイザー動作確認 ✅
 
