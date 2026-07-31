@@ -30,11 +30,13 @@ export interface GenerationStep {
 
 // This tokenizer's special tokens occupy ids 0-6: <unk>, <s>, </s>, [PAD], [CLS], [SEP], [MASK]
 // (verified by decoding ids 0-9 directly; there's no per-id metadata to read this from).
+const EOS_TOKEN_ID = 2
+const ALL_SPECIAL_TOKEN_IDS = new Set([0, 1, 2, 3, 4, 5, 6])
 // All but </s> (2) are excluded from actual sampling — they're shown in the candidate list
 // for transparency (e.g. "the model wasn't confident, <unk> ranked high"), but would just be
 // confusing noise if they ended up in the generated sentence itself. </s> is kept selectable
-// since choosing it has real meaning: it ends generation.
-const NON_EOS_SPECIAL_TOKEN_IDS = new Set([0, 1, 3, 4, 5, 6])
+// since choosing it has real meaning: it ends generation (subject to the `allowEos` step option).
+const NON_EOS_SPECIAL_TOKEN_IDS = new Set([...ALL_SPECIAL_TOKEN_IDS].filter((id) => id !== EOS_TOKEN_ID))
 
 // Sentencepiece word-boundary/meta pieces sometimes decode to an empty string in isolation.
 // Selecting one wouldn't visibly change the generated text at all (see the growing-text UI in
@@ -206,14 +208,16 @@ export async function stepGeneration(session: GenerationSession, options: StepOp
 }
 
 /**
- * Encodes `word` and strips the tokenizer's usual leading boundary-marker/trailing-eos artifacts
- * (see isSelectablePiece), leaving just the "real" content token id(s) for the word on its own.
- * Used to force a user-picked word into the generated text — see `stepGeneration`'s `forcedId`.
+ * Encodes `word` and strips the tokenizer's usual leading boundary-marker/trailing-`</s>`
+ * artifacts (`encode()` always appends an eos id, even for a single standalone word — unlike
+ * `isSelectablePiece`, this must drop it too, not just the non-eos specials), leaving just the
+ * "real" content token id(s) for the word on its own. Used to force a user-picked word into the
+ * generated text — see `stepGeneration`'s `forcedId`.
  */
 export function tokenizeWord(tokenizer: PreTrainedTokenizer, word: string): number[] {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const ids = (tokenizer as any).encode(word) as number[]
-  return ids.filter((id) => isSelectablePiece(id, tokenizer.decode([id])))
+  return ids.filter((id) => !ALL_SPECIAL_TOKEN_IDS.has(id) && tokenizer.decode([id]) !== '')
 }
 
 export function decodeGenerated(session: GenerationSession): string {

@@ -9,13 +9,13 @@ import './App.css'
 
 const WORD_CHOICES = ['猫', '今日', '学校', '音楽', '旅行', '未来', '友達', '料理', '宇宙', '花', '海', '本']
 const WORDS_TO_PICK = 3
-const MAX_NEW_TOKENS = 100
+const MAX_NEW_TOKENS = 80
 // Pacing for scene 2, split into two phases per token so the "候補と確率が表示される → 一つ選ばれる"
 // moment is easy to follow rather than flashing by. Tune these two independently:
 // - CANDIDATE_DISPLAY_MS: candidates shown with bars, nothing highlighted yet (時間をかけて確率を見る)
 // - CHOSEN_HOLD_MS: the sampled token is highlighted, held before it's appended to the text
-const CANDIDATE_DISPLAY_MS = 750
-const CHOSEN_HOLD_MS = 750
+const CANDIDATE_DISPLAY_MS = 600
+const CHOSEN_HOLD_MS = 600
 
 // All 3 styles use the same base model for now (Plan.md's other 2 fine-tuned models
 // haven't been sourced yet — see STEPS.md Step 7). Swap `modelId` per style once they exist.
