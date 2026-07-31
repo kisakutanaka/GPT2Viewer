@@ -29,6 +29,7 @@
   - このモデルの`generation_config`は`do_sample: true`が既定値になっている。greedy（常に最尤トークンを選ぶ）で生成すると`<unk>`ループなどに陥りやすく、top-k＋温度によるサンプリングの方が明らかに自然な日本語になることを確認済み。Step 3〜4の生成ロジックはgreedyではなくサンプリングを前提に設計すること。
   - 40MBはGitHubの「50MB超はGit LFS推奨」警告の閾値には達しておらず、100MBのハード上限にも余裕がある。残り2モデルを追加してもLFS化は見送る方針（合意済み）。なお、この構成（GitHub Actions経由のPagesデプロイ）はGit LFSのオブジェクトをそのままでは配信できず、`actions/checkout` に `lfs: true` を付ける等の追加対応が要る点に注意（「LFSにすれば自然に動く」ではない）。
 - 残り2モデル（Plan.mdの3モデル要件）を追加する際は、同様のONNX/量子化まわりの癖に当たる可能性が高い。まずHub上に既存のONNX変換版がないか探し、`graphOptimizationLevel: 'basic'`で回避できないか試してから自前変換に進むこと。またNode.jsではなく実際のブラウザでのロードをモデルごとに都度確認すること（Node/wasmのONNX Runtimeバックエンドの対応状況が既に一度乖離しているため）。
+- **生成ループ**（`src/lib/generate.ts`）: このバージョンのtransformers.jsでは `model.generate()` が各ステップのlogits/scoresを返さない（バンドルされたソースを実際に追跡すると、`return_dict_in_generate`のところに文字通り `// TODO: scores, // logits` とコメントされたまま未実装になっている）。一方このアプリの教育的UIには各ステップの候補トークンと確率が必要なため、生成ループは自前で組んでいる — `generate()`が内部で使っているのと同じ `prepare_inputs_for_generation` / `_update_model_kwargs_for_generation` / `_prepare_generation_config` を直接呼び出す方式。これらは公開の `.d.ts` には存在する（型は`any`）が、アンダースコア始まりなど内部寄りの性質で正式に文書化された公開APIではないため、transformers.jsのアップデートでシグネチャが変わる可能性がある。依存関係更新後に生成が壊れたら、まずここを疑うこと。各ステップの選択は上記の do_sample/greedy崩壊の理由により、argmaxではなくtop-k＋温度によるサンプリングを採用している。
 
 ## 設計方針（Plan.mdより）
 

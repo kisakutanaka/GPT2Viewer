@@ -1,4 +1,5 @@
 import { AutoModelForCausalLM, AutoTokenizer, env } from '@huggingface/transformers'
+import type { InferenceSession } from 'onnxruntime-common'
 
 export interface ModelDef {
   /** Path-safe key, also the folder name under public/models/. */
@@ -7,6 +8,8 @@ export interface ModelDef {
   label: string
   /** Original Hugging Face source repo, for crediting. */
   sourceRepo: string
+  /** Extra ONNX Runtime session options this model's file needs, if any. */
+  sessionOptions?: InferenceSession.SessionOptions
 }
 
 // rinna/japanese-gpt2-xsmall (MIT license), ONNX build from
@@ -19,7 +22,11 @@ export const BASE_MODEL: ModelDef = {
   id: 'rinna-japanese-gpt2-xsmall',
   label: 'rinna GPT-2 (xsmall)',
   sourceRepo: 'rinna/japanese-gpt2-xsmall',
+  sessionOptions: { graphOptimizationLevel: 'basic' },
 }
+
+// The other 2 fine-tuned models required by Plan.md will be appended here once converted.
+export const MODELS: ModelDef[] = [BASE_MODEL]
 
 env.allowLocalModels = true
 env.allowRemoteModels = false
@@ -29,7 +36,7 @@ export async function loadModel(def: ModelDef = BASE_MODEL) {
   const tokenizer = await AutoTokenizer.from_pretrained(def.id)
   const model = await AutoModelForCausalLM.from_pretrained(def.id, {
     dtype: 'q8',
-    session_options: { graphOptimizationLevel: 'basic' },
+    session_options: def.sessionOptions,
   })
   return { tokenizer, model }
 }

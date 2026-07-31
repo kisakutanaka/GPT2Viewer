@@ -14,6 +14,26 @@ export interface GenerationStep {
   isEos: boolean
 }
 
+// This tokenizer's special tokens occupy ids 0-6: <unk>, <s>, </s>, [PAD], [CLS], [SEP], [MASK]
+// (verified by decoding ids 0-9 directly; there's no per-id metadata to read this from).
+// All but </s> (2) are excluded from actual sampling — they're shown in the candidate list
+// for transparency (e.g. "the model wasn't confident, <unk> ranked high"), but would just be
+// confusing noise if they ended up in the generated sentence itself. </s> is kept selectable
+// since choosing it has real meaning: it ends generation.
+const NON_EOS_SPECIAL_TOKEN_IDS = new Set([0, 1, 3, 4, 5, 6])
+
+// Sentencepiece word-boundary/meta pieces sometimes decode to an empty string in isolation.
+// Selecting one wouldn't visibly change the generated text at all (see the growing-text UI in
+// scene 2), and in Japanese text (no inter-word spacing) they add nothing — so they're excluded
+// from sampling the same way special tokens are, while still shown (as "∅") in the candidate list.
+function isSelectablePiece(id: number, piece: string): boolean {
+  return !NON_EOS_SPECIAL_TOKEN_IDS.has(id) && piece !== ''
+}
+
+// How many top-probability ids to decode+inspect when building the selectable pool. Must be
+// comfortably larger than `topK` since some of the top ids get filtered out by isSelectablePiece.
+const SELECTION_POOL_SIZE = 50
+
 export interface GenerationSession {
   model: PreTrainedModel
   tokenizer: PreTrainedTokenizer
@@ -98,14 +118,22 @@ export async function stepGeneration(session: GenerationSession, options: StepOp
   const lastLogits = outputs.logits.data.slice((seqLen - 1) * vocabSize, seqLen * vocabSize)
   const probs = softmax(lastLogits)
 
-  const topIndices = [...probs.keys()].sort((a, b) => probs[b] - probs[a]).slice(0, topK)
-  const candidates: TokenCandidate[] = topIndices.map((id) => ({
+  const sortedIndices = [...probs.keys()].sort((a, b) => probs[b] - probs[a])
+  const poolIndices = sortedIndices.slice(0, Math.max(topK, SELECTION_POOL_SIZE))
+  const pool: TokenCandidate[] = poolIndices.map((id) => ({
     id,
     piece: tokenizer.decode([id]),
     prob: probs[id],
   }))
 
-  const chosen = sampleFrom(candidates, temperature)
+  // Candidates shown in the UI: raw top-K, unfiltered (includes special/empty-piece tokens for
+  // transparency — e.g. "the model wasn't confident, <unk> ranked high").
+  const candidates = pool.slice(0, topK)
+
+  // Selection pool: filtered (see isSelectablePiece) so the generated text itself never contains
+  // raw "<unk>"/"[PAD]"/etc, or an invisible token that doesn't visibly grow the on-screen text.
+  const selectable = pool.filter((c) => isSelectablePiece(c.id, c.piece)).slice(0, topK)
+  const chosen = sampleFrom(selectable, temperature)
   session.allInputIds[0].push(BigInt(chosen.id))
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   session.modelInputs = (model as any)._update_model_kwargs_for_generation({
