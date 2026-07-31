@@ -14,10 +14,11 @@ export interface ModelDef {
 
 // rinna/japanese-gpt2-xsmall (MIT license), ONNX build from
 // https://huggingface.co/saldra/rinna-japanese-gpt2-xsmall-onnx (also MIT), copied locally.
-// Its quantized graph (int4 blockwise/MatMulNBits) only loads in onnxruntime-web if the
-// 'TransposeDQWeightsForMatMulNBits' fusion optimization is skipped — see graphOptimizationLevel
-// below and STEPS.md Step 1 notes for the full story (including why a self-converted int8
-// alternative was tried and dropped: near-identical output quality, extra size, extra complexity).
+// Its quantized graph (QDQ-format int8 — see quantize_config.json, not int4 as first assumed)
+// only loads in onnxruntime-web if the 'TransposeDQWeightsForMatMulNBits' fusion optimization
+// is skipped — see graphOptimizationLevel below and STEPS.md Step 1 notes for the full story
+// (including why a self-converted int8 alternative was tried and dropped: near-identical output
+// quality, extra size, extra complexity).
 export const BASE_MODEL: ModelDef = {
   id: 'rinna-japanese-gpt2-xsmall',
   label: 'rinna GPT-2 (xsmall)',
@@ -25,8 +26,20 @@ export const BASE_MODEL: ModelDef = {
   sessionOptions: { graphOptimizationLevel: 'basic' },
 }
 
-// The other 2 fine-tuned models required by Plan.md will be appended here once converted.
-export const MODELS: ModelDef[] = [BASE_MODEL]
+// "詩" style: rinna/japanese-gpt2-xsmall fine-tuned on public-domain 童謡 lyrics (see
+// training-data/douyou/). Self-converted with the same optimum-cli export + quantize_dynamic
+// (QOperator int8) pipeline as the base model's self-converted alternative — this one loads
+// fine under the default graph optimization level, no session_options workaround needed, since
+// QOperator format never triggers the QDQ/MatMulNBits fusion bug the base model's file hits.
+export const DOUYOU_MODEL: ModelDef = {
+  id: 'rinna-japanese-gpt2-xsmall-douyou',
+  label: 'rinna GPT-2 (xsmall) — 童謡ファインチューン',
+  sourceRepo: 'rinna/japanese-gpt2-xsmall (fine-tuned)',
+}
+
+// The remaining fine-tuned model (小説/novel style) required by Plan.md will be appended here
+// once converted.
+export const MODELS: ModelDef[] = [BASE_MODEL, DOUYOU_MODEL]
 
 env.allowLocalModels = true
 env.allowRemoteModels = false

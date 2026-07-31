@@ -11,7 +11,7 @@ interface WordSelectStageProps {
   styleOptions: StyleOption[]
   selectedStyle: string | null
   onSelectStyle: (key: string) => void
-  modelReady: boolean
+  isLoadingModel: boolean
   status: string
   onStart: () => void
 }
@@ -24,12 +24,12 @@ export function WordSelectStage({
   styleOptions,
   selectedStyle,
   onSelectStyle,
-  modelReady,
+  isLoadingModel,
   status,
   onStart,
 }: WordSelectStageProps) {
   const wordsReady = selectedWords.length === wordsToPick
-  const canStart = wordsReady && selectedStyle !== null && modelReady
+  const canStart = wordsReady && selectedStyle !== null && !isLoadingModel
 
   return (
     <section className="stage stage-select">
@@ -71,10 +71,10 @@ export function WordSelectStage({
       )}
 
       <button className="primary-button" onClick={onStart} disabled={!canStart}>
-        作文する
+        {isLoadingModel ? 'モデルを読み込み中...' : '作文する'}
       </button>
 
-      {!modelReady && <p className="status-text">{status}</p>}
+      {status && <p className="status-text">{status}</p>}
     </section>
   )
 }

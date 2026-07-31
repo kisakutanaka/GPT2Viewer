@@ -1,5 +1,5 @@
-import { useEffect, useRef, useState } from 'react'
-import { loadModel, MODELS } from './lib/model'
+import { useRef, useState } from 'react'
+import { loadModel, MODELS, DOUYOU_MODEL } from './lib/model'
 import { startGeneration, stepGeneration, decodeGenerated, tokenizeWord, type GenerationStep } from './lib/generate'
 import type { PreTrainedModel, PreTrainedTokenizer } from '@huggingface/transformers'
 import { WordSelectStage, type StyleOption } from './components/WordSelectStage'
@@ -17,12 +17,13 @@ const MAX_NEW_TOKENS = 80
 const CANDIDATE_DISPLAY_MS = 900
 const CHOSEN_HOLD_MS = 600
 
-// All 3 styles use the same base model for now (Plan.md's other 2 fine-tuned models
-// haven't been sourced yet — see STEPS.md Step 7). Swap `modelId` per style once they exist.
+// 小説/名言 still use the base model — their fine-tuned corpora haven't been sourced yet
+// (see STEPS.md Step 10). 詩 uses the 童謡-fine-tuned model. Swap the remaining `modelId`s
+// once the other 2 fine-tunes exist.
 const STYLE_OPTIONS: (StyleOption & { modelId: string })[] = [
   { key: 'novel', label: '小説', modelId: MODELS[0].id },
   { key: 'quote', label: '名言', modelId: MODELS[0].id },
-  { key: 'poem', label: '詩', modelId: MODELS[0].id },
+  { key: 'poem', label: '詩', modelId: DOUYOU_MODEL.id },
 ]
 
 type Scene = 'select' | 'generating' | 'result'
@@ -46,8 +47,8 @@ function isBoundaryPiece(piece: string): boolean {
 
 function App() {
   const [scene, setScene] = useState<Scene>('select')
-  const [status, setStatus] = useState('モデルを読み込み中...')
-  const [modelReady, setModelReady] = useState(false)
+  const [status, setStatus] = useState('')
+  const [isLoadingModel, setIsLoadingModel] = useState(false)
   const [selectedWords, setSelectedWords] = useState<string[]>([])
   const [selectedStyle, setSelectedStyle] = useState<string | null>(null)
   const [introText, setIntroText] = useState('')
@@ -58,24 +59,6 @@ function App() {
   const [stepCount, setStepCount] = useState(0)
 
   const modelCacheRef = useRef(new Map<string, { model: PreTrainedModel; tokenizer: PreTrainedTokenizer }>())
-
-  useEffect(() => {
-    let cancelled = false
-    loadModel(MODELS[0])
-      .then((loaded) => {
-        if (cancelled) return
-        modelCacheRef.current.set(MODELS[0].id, loaded)
-        setStatus('準備OK')
-        setModelReady(true)
-      })
-      .catch((err) => {
-        console.error('model load failed:', err)
-        if (!cancelled) setStatus(`読み込み失敗: ${String(err)}`)
-      })
-    return () => {
-      cancelled = true
-    }
-  }, [])
 
   function toggleWord(word: string) {
     setSelectedWords((prev) => {
@@ -99,6 +82,20 @@ function App() {
     const style = STYLE_OPTIONS.find((s) => s.key === selectedStyle)
     if (!style) return
 
+    setStatus('モデルを読み込み中...')
+    setIsLoadingModel(true)
+    let loaded: { model: PreTrainedModel; tokenizer: PreTrainedTokenizer }
+    try {
+      loaded = await ensureModel(style.modelId)
+    } catch (err) {
+      console.error('model load failed:', err)
+      setStatus(`読み込み失敗: ${String(err)}`)
+      setIsLoadingModel(false)
+      return
+    }
+    setIsLoadingModel(false)
+    setStatus('')
+
     const [w1, w2, w3] = selectedWords
     const intro = `${w1}、${w2}、${w3}を使った文章を作ります。`
     const story = `${w1}`
@@ -110,7 +107,7 @@ function App() {
     setScene('generating')
 
     try {
-      const { model, tokenizer } = await ensureModel(style.modelId)
+      const { model, tokenizer } = loaded
       const session = await startGeneration(model, tokenizer, intro + story)
 
       // w1 is already baked into `story`. To keep the "w1、w2、w3を使った文章を作ります" promise,
@@ -172,6 +169,16 @@ function App() {
   }
 
   function handleRestart() {
+    // Free the ONNX session(s) for whichever model(s) got loaded this round, rather than
+    // leaving them cached indefinitely — a kiosk-style usage pattern (many visitors, page
+    // never reloaded) could otherwise accumulate every style's model in WASM memory over time,
+    // which matters given the iPhone/mobile Safari memory constraint this app targets.
+    const cachedModels = [...modelCacheRef.current.values()].map((c) => c.model)
+    modelCacheRef.current.clear()
+    for (const model of cachedModels) {
+      model.dispose().catch((err) => console.error('model dispose failed:', err))
+    }
+
     setSelectedWords([])
     setSelectedStyle(null)
     setIntroText('')
@@ -216,7 +223,7 @@ function App() {
       styleOptions={STYLE_OPTIONS}
       selectedStyle={selectedStyle}
       onSelectStyle={setSelectedStyle}
-      modelReady={modelReady}
+      isLoadingModel={isLoadingModel}
       status={status}
       onStart={handleStart}
     />

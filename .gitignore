@@ -12,6 +12,11 @@ dist
 dist-ssr
 *.local
 
+# Fine-tuned model checkpoints (raw PyTorch weights, ~150MB — exceeds GitHub's 100MB hard
+# limit; regenerable from training-data/*/finetune.py + corpus.json). Only the final
+# ONNX-quantized model actually used by the app belongs in public/models/.
+training-data/**/model-checkpoint/
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

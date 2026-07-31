@@ -6,7 +6,7 @@
 前提技術メモ:
 - TypeScript + Vite（GitHub Pages配信を想定した静的ビルド）
 - モデル推論はクライアントサイドで [transformers.js](https://github.com/huggingface/transformers.js)（`@huggingface/transformers`）を使用
-- rinna/japanese-gpt2-xsmall（MITライセンス）のONNX変換版（`saldra/rinna-japanese-gpt2-xsmall-onnx`、MITライセンス、40MB、int4 blockwise量子化）を `public/models/` にローカルコピーして配信している。読み込み時に `session_options: { graphOptimizationLevel: 'basic' }` を指定するのが必須（詳細はStep 1参照）
+- rinna/japanese-gpt2-xsmall（MITライセンス）のONNX変換版（`saldra/rinna-japanese-gpt2-xsmall-onnx`、MITライセンス、40MB）を `public/models/` にローカルコピーして配信している。読み込み時に `session_options: { graphOptimizationLevel: 'basic' }` を指定するのが必須（詳細はStep 1参照）。※`quantize_config.json`で確認したところ実際は`weight_type: QInt8`（8bit）で、当初推測していた「int4 blockwise/MatMulNBits」ではなかった（訂正）。ロード失敗の原因もint4特有の問題ではなく、QDQ形式のint8量子化とtied weights・融合最適化パスの組み合わせによるもの
 - 動作環境はiPhone（モバイルSafari）を想定。モデルサイズ・メモリ使用量は都度この観点で確認する
 - モデルのデフォルト`generation_config`は `do_sample: true` 前提。greedy（常に最尤トークン）で生成すると`<unk>`ループ等に陥りやすく、top-k+温度によるサンプリングの方が明らかに自然な文章になることを確認済み（Step 1の検証時）。Step 3/4はこれを踏まえてサンプリングを前提に設計する
 
@@ -91,3 +91,20 @@ Plan.mdのUXを3シーン構成で実装:
 - [x] 実際にPages上でモデルダウンロード〜ロードまで動作することを確認（自作量子化モデル、エラーなし）
 
 進行状況を都度Pages上で確認したいとのことなので、Step 9は前倒しで設定済み。以降の各Stepはpushするたびに `https://kisakutanaka.github.io/GPT2Viewer/` に自動反映される。
+
+## Step 10: 残り2モデル（名言・詩スタイル）の準備 🚧進行中
+
+Step 7で保留していた3モデル目標に着手。既存のONNX変換済みモデル探しではなく、xsmallを3つのコーパス（小説=青空文庫、名言=偉人の名言、詩=童謡）でそれぞれファインチューニングする方針に転換（前回の展示でこの3コーパス構成を使った実績があるため）。
+
+- [x] 詩スタイル用コーパス収集: 著作権消滅済み（没後70年超、作詞者の没年で判断）の童謡作詞者4名（野口雨情1945没・北原白秋1942没・高野辰之1947没・清水かつら1951没）から47曲を[worldfolksong.com](https://www.worldfolksong.com/songbook/japan/index.html)よりスクレイピング。`training-data/douyou/corpus.json`/`corpus.txt`
+- [x] 詩スタイルのファインチューニング試行・epoch数の検証 → **epoch35を採用**（詳細・わかったことは`training-data/douyou/README.md`参照）
+- [x] 詩スタイルモデルのONNX変換・量子化（Step 1の`ai-tools`環境・手順を再利用）→ `public/models/rinna-japanese-gpt2-xsmall-douyou/`へ配置。`optimum-cli export onnx` → `quantize_dynamic(weight_type=QUInt8)`（QOperator形式）で38MB。QOperator形式のためsaldra版で踏んだQDQ/MatMulNBits融合バグは発生せず、`graphOptimizationLevel`指定なしで`onnxruntime-web`にロード確認済み。`src/lib/model.ts`に`DOUYOU_MODEL`として追加、`src/App.tsx`の「詩」スタイルに接続済み
+- [ ] 名言スタイル用コーパス収集（Wikiquote日本語版などを情報源に個々の名言をリスト化する方針で検討中）
+- [ ] 小説スタイル用コーパス収集（青空文庫、著作権切れ作家の作品）
+- [ ] 名言・小説スタイルのファインチューニング
+- [ ] `src/App.tsx`の`STYLE_OPTIONS`を実際の3モデルに接続
+
+**わかったこと（ファインチューニング全般）:**
+- コーパスがモデル規模に対して極端に小さい場合（今回は42曲/約6,600トークン vs 43.7Mパラメータ）、検証ロスが最小になる時点と「スタイルがそれらしく変化する」時点が一致しない。検証ロスを信じて早期に切り上げると、文体変化がほとんど起きていない状態で採用してしまう
+- epoch数を上げすぎると、丸暗記が進むだけでなく文章が破綻する（意味不明な羅列）別の劣化モードに入る。ロスが単調に上がり続ける = 一様に悪化ではなく、「まだ文法的」「完全に破綻」の間で epoch ごとに揺れがある。生成文を実際に見て選ぶ必要がある
+- コーパスが極小の場合、150epoch程度まで伸ばしても検証ロスが再び下がる（局所解を抜けた先がある）ようなことは起きなかった。単調に上がって頭打ちになるだけ。同じ轍を踏まないよう、名言・小説コーパスでも同様の見極めが必要
