@@ -101,7 +101,7 @@ function App() {
 
     const [w1, w2, w3] = selectedWords
     const intro = `${w1}、${w2}、${w3}を使った文章を作ります。`
-    const story = `${w1}`
+    const story = `${w1}は`
     setIntroText(intro)
     setStoryPrefix(story)
     setGeneratedText('')

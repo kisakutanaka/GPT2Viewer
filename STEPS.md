@@ -97,8 +97,8 @@ Plan.mdのUXを3シーン構成で実装:
 Step 7で保留していた3モデル目標に着手。既存のONNX変換済みモデル探しではなく、xsmallを3つのコーパス（小説=青空文庫、名言=偉人の名言、詩=童謡）でそれぞれファインチューニングする方針に転換（前回の展示でこの3コーパス構成を使った実績があるため）。
 
 - [x] 詩スタイル用コーパス収集: 著作権消滅済み（没後70年超、作詞者の没年で判断）の童謡作詞者4名（野口雨情1945没・北原白秋1942没・高野辰之1947没・清水かつら1951没）から47曲を[worldfolksong.com](https://www.worldfolksong.com/songbook/japan/index.html)よりスクレイピング。`training-data/douyou/corpus.json`/`corpus.txt`
-- [x] 詩スタイルのファインチューニング試行・epoch数の検証 → **epoch35を採用**（詳細・わかったことは`training-data/douyou/README.md`参照）
-- [x] 詩スタイルモデルのONNX変換・量子化（Step 1の`ai-tools`環境・手順を再利用）→ `public/models/rinna-japanese-gpt2-xsmall-douyou/`へ配置。`optimum-cli export onnx` → `quantize_dynamic(weight_type=QUInt8)`（QOperator形式）で38MB。QOperator形式のためsaldra版で踏んだQDQ/MatMulNBits融合バグは発生せず、`graphOptimizationLevel`指定なしで`onnxruntime-web`にロード確認済み。`src/lib/model.ts`に`DOUYOU_MODEL`として追加、`src/App.tsx`の「詩」スタイルに接続済み
+- [x] 詩スタイルのファインチューニング試行・epoch数の検証 → 初回はepoch35（40epochスケジュール）を採用したが「もっと極端に文体が変わってほしい」というフィードバックを受けて再実験。**スケジュール自体を80epochに伸ばした上でepoch60を採用**に変更（学習率減衰はスケジュール全体の長さに連動するため、同じepoch数でもスケジュール長が違うと実効的な学習量が変わる、という発見が鍵）。詳細・わかったことは`training-data/douyou/README.md`参照
+- [x] 詩スタイルモデルのONNX変換・量子化（Step 1の`ai-tools`環境・手順を再利用）→ `public/models/rinna-japanese-gpt2-xsmall-douyou/`へ配置。`optimum-cli export onnx` → `quantize_dynamic(weight_type=QUInt8)`（QOperator形式）で38MB。QOperator形式のためsaldra版で踏んだQDQ/MatMulNBits融合バグは発生せず、`graphOptimizationLevel`指定なしで`onnxruntime-web`にロード確認済み。`src/lib/model.ts`に`DOUYOU_MODEL`として追加、`src/App.tsx`の「詩」スタイルに接続済み（epoch60版に差し替え済み）
 - [x] モデルが2つになったのに合わせて読み込みタイミングを見直し: 起動時のプリロードをやめ、「作文する」押下時に選択スタイルのモデルだけ遅延ロード（`ensureModel`）。「もう一度体験する」では逆にキャッシュ済み全モデルを`model.dispose()`で解放してからキャッシュクリアし、次回選択時は必ず再ロードになるようにした（常に最大1モデル分のメモリしか保持しない設計。キオスク的な長時間・多人数利用を想定）。ブラウザ動作確認済み
 - [ ] 名言スタイル用コーパス収集（Wikiquote日本語版などを情報源に個々の名言をリスト化する方針で検討中）
 - [x] 小説スタイル用コーパス収集: 青空文庫の公式メタデータCSV（`list_person_all_extended_utf8.csv`、作品著作権フラグで判定）から著作権切れの夏目漱石・芥川竜之介・太宰治の代表作11作品を取得・クリーニング。合計約231万文字（童謡コーパスの約260倍）。`training-data/aozora/corpus.json`/`corpus.txt`

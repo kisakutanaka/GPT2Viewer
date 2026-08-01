@@ -12,11 +12,11 @@ from transformers import (
 
 BASE_MODEL = "rinna/japanese-gpt2-xsmall"
 CORPUS_PATH = "/Users/tanakakisaku/Documents/dev/ScienseMuseum/AI/GPT2Viewer/training-data/douyou/corpus.json"
-OUT_DIR = "/private/tmp/claude-501/-Users-tanakakisaku-Documents-dev-ScienseMuseum-AI-GPT2Viewer/d141fa56-e564-4ce8-b0c7-a5335841e87e/scratchpad/douyou-sweep"
+OUT_DIR = "/private/tmp/claude-501/-Users-tanakakisaku-Documents-dev-ScienseMuseum-AI-GPT2Viewer/d141fa56-e564-4ce8-b0c7-a5335841e87e/scratchpad/douyou-extreme"
 MAX_LENGTH = 256
 VAL_SONGS = 5
 SEED = 42
-NUM_EPOCHS = 40
+NUM_EPOCHS = 80
 
 random.seed(SEED)
 torch.manual_seed(SEED)
@@ -62,9 +62,11 @@ class LyricsDataset(Dataset):
 train_dataset = LyricsDataset(train_data)
 val_dataset = LyricsDataset(val_data)
 
-# save_only_model=True skips optimizer/scheduler state (which roughly triples checkpoint size
-# for Adam) since we only need the weights for qualitative generation comparisons here, not to
-# resume training — disk on this machine is at ~94% so keeping each checkpoint small matters.
+# Extending the schedule to 80 epochs (vs the earlier 40) changes the LR trajectory at every
+# epoch mark, since LR decays linearly to 0 over the *whole* schedule — "epoch 35" here is not
+# the same weights as "epoch 35" in a 40-epoch run. Saving every epoch from 40 onward so we can
+# check whether pushing further trades coherence for a *stronger* 童謡 flavor, or just breaks
+# down further the way the earlier 25-40 sweep did.
 args = TrainingArguments(
     output_dir=OUT_DIR + "-checkpoints",
     num_train_epochs=NUM_EPOCHS,
@@ -74,7 +76,7 @@ args = TrainingArguments(
     eval_strategy="epoch",
     save_strategy="epoch",
     save_only_model=True,
-    save_total_limit=20,
+    save_total_limit=40,
     load_best_model_at_end=True,
     metric_for_best_model="eval_loss",
     greater_is_better=False,
