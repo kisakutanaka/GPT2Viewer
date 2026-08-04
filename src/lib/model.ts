@@ -46,9 +46,16 @@ export const AOZORA_MODEL: ModelDef = {
   sourceRepo: 'rinna/japanese-gpt2-xsmall (fine-tuned)',
 }
 
-// The remaining fine-tuned model (名言/quote style) required by Plan.md will be appended here
-// once converted.
-export const MODELS: ModelDef[] = [BASE_MODEL, DOUYOU_MODEL, AOZORA_MODEL]
+// "名言" style: rinna/japanese-gpt2-xsmall fine-tuned on public-domain historical quotes (see
+// training-data/meigen/) — same self-converted pipeline as DOUYOU_MODEL/AOZORA_MODEL.
+export const MEIGEN_MODEL: ModelDef = {
+  id: 'rinna-japanese-gpt2-xsmall-meigen',
+  label: 'rinna GPT-2 (xsmall) — 名言ファインチューン',
+  sourceRepo: 'rinna/japanese-gpt2-xsmall (fine-tuned)',
+}
+
+// All 3 of Plan.md's fine-tuned styles now exist.
+export const MODELS: ModelDef[] = [BASE_MODEL, DOUYOU_MODEL, AOZORA_MODEL, MEIGEN_MODEL]
 
 env.allowLocalModels = true
 env.allowRemoteModels = false

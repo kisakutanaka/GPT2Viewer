@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react'
-import { loadModel, MODELS, DOUYOU_MODEL, AOZORA_MODEL } from './lib/model'
+import { loadModel, MODELS, DOUYOU_MODEL, AOZORA_MODEL, MEIGEN_MODEL } from './lib/model'
 import { startGeneration, stepGeneration, decodeGenerated, tokenizeWord, type GenerationStep } from './lib/generate'
 import type { PreTrainedModel, PreTrainedTokenizer } from '@huggingface/transformers'
 import { WordSelectStage, type StyleOption } from './components/WordSelectStage'
@@ -20,12 +20,10 @@ const MAX_NEW_TOKENS = 80
 const CANDIDATE_DISPLAY_MS = 750
 const CHOSEN_HOLD_MS = 500
 
-// 名言 still uses the base model — its fine-tuned corpus hasn't been sourced yet (see
-// STEPS.md Step 10). 詩/小説 use their respective fine-tuned models. Swap the remaining
-// `modelId` once the last fine-tune exists.
+// All 3 styles now use their own fine-tuned model (see STEPS.md Step 10).
 const STYLE_OPTIONS: (StyleOption & { modelId: string })[] = [
   { key: 'novel', label: '小説', modelId: AOZORA_MODEL.id },
-  { key: 'quote', label: '名言', modelId: MODELS[0].id },
+  { key: 'quote', label: '名言', modelId: MEIGEN_MODEL.id },
   { key: 'poem', label: '詩', modelId: DOUYOU_MODEL.id },
 ]
 
